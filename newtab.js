@@ -6,6 +6,7 @@ const WEATHER_OVERRIDE_KEY = "weatherOverride";
 const WEATHER_CACHE_TTL = 15 * 60 * 1000;
 const DISPLAY_NAME_KEY = "displayName";
 const WHEEL_PAGE_COOLDOWN = 350;
+const THEME_KEY = "themeSettings";
 
 let modalMode = "add-favorite";
 let editingTarget = null;
@@ -15,6 +16,52 @@ let currentFavoritesPage = 0;
 let totalFavoritesPages = 1;
 let lastFavoritesWheelAt = 0;
 let displayName = "";
+let themeSettings = null;
+
+const THEME_PRESETS = {
+    midnight: {
+        bg: "#0f1115",
+        panel: "#171a21",
+        panel2: "#1f2430",
+        text: "#e8ecf1",
+        muted: "#9aa4b2",
+        accent: "#7aa2f7",
+        border: "#2a3040"
+    },
+    dusk: {
+        bg: "#11131f",
+        panel: "#1a1d2a",
+        panel2: "#222637",
+        text: "#f0f2f7",
+        muted: "#b4bbc8",
+        accent: "#f0932b",
+        border: "#2d3448"
+    },
+    forest: {
+        bg: "#0c1611",
+        panel: "#15211a",
+        panel2: "#1e2b22",
+        text: "#e9f2ec",
+        muted: "#a0b3a7",
+        accent: "#2ecc71",
+        border: "#24352b"
+    },
+    sand: {
+        bg: "#f6f1e6",
+        panel: "#fffaf0",
+        panel2: "#efe5d6",
+        text: "#1f1a12",
+        muted: "#6d6251",
+        accent: "#c97b42",
+        border: "#d9cbb7"
+    }
+};
+
+const THEME_DEFAULT = {
+    preset: "midnight",
+    colors: { ...THEME_PRESETS.midnight },
+    backgroundUrl: ""
+};
 
 function $(id) {
     return document.getElementById(id);
@@ -68,10 +115,268 @@ function updateGreeting() {
 }
 
 function updateNameUi() {
-    const editBtn = $("editNameBtn");
-    if (editBtn) {
-        editBtn.classList.remove("is-hidden");
+    const trigger = $("nameMenuTrigger");
+    if (trigger) {
+        trigger.classList.remove("is-hidden");
     }
+}
+
+function normalizeColor(value, fallback) {
+    if (typeof value !== "string") return fallback;
+    const trimmed = value.trim();
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed)) {
+        return trimmed;
+    }
+    return fallback;
+}
+
+function sanitizeBackgroundUrl(value) {
+    if (!value) return "";
+    try {
+        const parsed = new URL(value);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+            return "";
+        }
+        return parsed.toString();
+    } catch {
+        return "";
+    }
+}
+
+function resolveThemeColors(settings) {
+    const preset = settings?.preset || THEME_DEFAULT.preset;
+    const base =
+        preset !== "custom" && THEME_PRESETS[preset]
+            ? THEME_PRESETS[preset]
+            : THEME_PRESETS[THEME_DEFAULT.preset];
+
+    if (preset !== "custom") {
+        return { preset, colors: { ...base } };
+    }
+
+    const colors = settings?.colors || {};
+    return {
+        preset,
+        colors: {
+            bg: normalizeColor(colors.bg, base.bg),
+            panel: normalizeColor(colors.panel, base.panel),
+            panel2: normalizeColor(colors.panel2, base.panel2),
+            text: normalizeColor(colors.text, base.text),
+            muted: normalizeColor(colors.muted, base.muted),
+            accent: normalizeColor(colors.accent, base.accent),
+            border: normalizeColor(colors.border, base.border)
+        }
+    };
+}
+
+async function getThemeSettings() {
+    const result = await chrome.storage.local.get([THEME_KEY]);
+    const stored = result[THEME_KEY];
+    if (!stored || typeof stored !== "object") {
+        return { ...THEME_DEFAULT };
+    }
+    return {
+        preset: stored.preset || THEME_DEFAULT.preset,
+        colors: stored.colors || { ...THEME_DEFAULT.colors },
+        backgroundUrl: stored.backgroundUrl || ""
+    };
+}
+
+async function saveThemeSettings(settings) {
+    await chrome.storage.local.set({ [THEME_KEY]: settings });
+}
+
+function applyThemeSettings(settings) {
+    const resolved = resolveThemeColors(settings);
+    const colors = resolved.colors;
+    const root = document.documentElement;
+
+    root.style.setProperty("--bg", colors.bg);
+    root.style.setProperty("--panel", colors.panel);
+    root.style.setProperty("--panel-2", colors.panel2);
+    root.style.setProperty("--text", colors.text);
+    root.style.setProperty("--muted", colors.muted);
+    root.style.setProperty("--accent", colors.accent);
+    root.style.setProperty("--border", colors.border);
+
+    const backgroundUrl = sanitizeBackgroundUrl(settings?.backgroundUrl || "");
+    root.style.setProperty(
+        "--bg-image",
+        backgroundUrl ? `url("${backgroundUrl}")` : "none"
+    );
+}
+
+async function loadThemeSettings() {
+    themeSettings = await getThemeSettings();
+    applyThemeSettings(themeSettings);
+}
+
+function setThemeInputValues(colors) {
+    const colorBg = $("colorBg");
+    const colorPanel = $("colorPanel");
+    const colorPanel2 = $("colorPanel2");
+    const colorText = $("colorText");
+    const colorMuted = $("colorMuted");
+    const colorAccent = $("colorAccent");
+    const colorBorder = $("colorBorder");
+
+    const safeColors = {
+        bg: normalizeColor(colors.bg, THEME_DEFAULT.colors.bg),
+        panel: normalizeColor(colors.panel, THEME_DEFAULT.colors.panel),
+        panel2: normalizeColor(colors.panel2, THEME_DEFAULT.colors.panel2),
+        text: normalizeColor(colors.text, THEME_DEFAULT.colors.text),
+        muted: normalizeColor(colors.muted, THEME_DEFAULT.colors.muted),
+        accent: normalizeColor(colors.accent, THEME_DEFAULT.colors.accent),
+        border: normalizeColor(colors.border, THEME_DEFAULT.colors.border)
+    };
+
+    if (colorBg) colorBg.value = safeColors.bg;
+    if (colorPanel) colorPanel.value = safeColors.panel;
+    if (colorPanel2) colorPanel2.value = safeColors.panel2;
+    if (colorText) colorText.value = safeColors.text;
+    if (colorMuted) colorMuted.value = safeColors.muted;
+    if (colorAccent) colorAccent.value = safeColors.accent;
+    if (colorBorder) colorBorder.value = safeColors.border;
+}
+
+function readCustomColorsFromInputs() {
+    return {
+        bg: $("colorBg")?.value || THEME_DEFAULT.colors.bg,
+        panel: $("colorPanel")?.value || THEME_DEFAULT.colors.panel,
+        panel2: $("colorPanel2")?.value || THEME_DEFAULT.colors.panel2,
+        text: $("colorText")?.value || THEME_DEFAULT.colors.text,
+        muted: $("colorMuted")?.value || THEME_DEFAULT.colors.muted,
+        accent: $("colorAccent")?.value || THEME_DEFAULT.colors.accent,
+        border: $("colorBorder")?.value || THEME_DEFAULT.colors.border
+    };
+}
+
+function getSelectedThemePreset() {
+    const selected = document.querySelector("input[name=\"themePreset\"]:checked");
+    return selected ? selected.value : THEME_DEFAULT.preset;
+}
+
+function updateCustomFieldsVisibility(preset) {
+    const container = $("themeCustomFields");
+    if (!container) return;
+    if (preset === "custom") {
+        container.classList.remove("is-hidden");
+    } else {
+        container.classList.add("is-hidden");
+    }
+}
+
+function applyThemePreview(colors, backgroundUrl) {
+    const preview = $("themePreview");
+    if (!preview) return;
+    preview.style.setProperty("--panel", colors.panel);
+    preview.style.setProperty("--text", colors.text);
+    preview.style.setProperty("--border", colors.border);
+    preview.style.backgroundColor = colors.panel;
+    preview.style.color = colors.text;
+    const sanitized = sanitizeBackgroundUrl(backgroundUrl);
+    preview.style.backgroundImage = sanitized ? `url("${sanitized}")` : "none";
+    preview.style.backgroundSize = "cover";
+    preview.style.backgroundPosition = "center";
+}
+
+function updateThemePreviewFromForm() {
+    const preset = getSelectedThemePreset();
+    const backgroundInput = $("backgroundUrl");
+    const backgroundUrl = backgroundInput ? backgroundInput.value.trim() : "";
+    const colors =
+        preset === "custom"
+            ? readCustomColorsFromInputs()
+            : THEME_PRESETS[preset] || THEME_PRESETS[THEME_DEFAULT.preset];
+
+    applyThemePreview(colors, backgroundUrl);
+}
+
+function openCustomizeModal() {
+    closeOpenMenu();
+    const modal = $("customizeModal");
+    const error = $("customizeError");
+    if (error) {
+        error.textContent = "";
+    }
+
+    const settings = themeSettings || THEME_DEFAULT;
+    let preset = settings.preset || THEME_DEFAULT.preset;
+    if (preset !== "custom" && !THEME_PRESETS[preset]) {
+        preset = THEME_DEFAULT.preset;
+    }
+    const presetInput = document.querySelector(
+        `input[name="themePreset"][value="${preset}"]`
+    );
+    if (presetInput) {
+        presetInput.checked = true;
+    }
+
+    const customColors = resolveThemeColors({ preset: "custom", colors: settings.colors }).colors;
+    setThemeInputValues(customColors);
+
+    const backgroundInput = $("backgroundUrl");
+    if (backgroundInput) {
+        backgroundInput.value = settings.backgroundUrl || "";
+    }
+
+    updateCustomFieldsVisibility(preset);
+    updateThemePreviewFromForm();
+
+    if (modal) {
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    if (presetInput) {
+        presetInput.focus();
+    }
+}
+
+function closeCustomizeModal() {
+    const modal = $("customizeModal");
+    const error = $("customizeError");
+    if (modal) {
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+    }
+    if (error) {
+        error.textContent = "";
+    }
+}
+
+async function handleCustomizeSubmit(event) {
+    event.preventDefault();
+    const error = $("customizeError");
+    const backgroundInput = $("backgroundUrl");
+    const backgroundValue = backgroundInput ? backgroundInput.value.trim() : "";
+    const preset = getSelectedThemePreset();
+    const colors = readCustomColorsFromInputs();
+
+    if (backgroundValue) {
+        const sanitized = sanitizeBackgroundUrl(backgroundValue);
+        if (!sanitized) {
+            if (error) {
+                error.textContent = "Enter a valid http or https image URL.";
+            }
+            return;
+        }
+    }
+
+    if (error) {
+        error.textContent = "";
+    }
+
+    const nextSettings = {
+        preset,
+        colors,
+        backgroundUrl: backgroundValue
+    };
+
+    await saveThemeSettings(nextSettings);
+    themeSettings = nextSettings;
+    applyThemeSettings(nextSettings);
+    closeCustomizeModal();
 }
 
 function openNameModal() {
@@ -1183,6 +1488,11 @@ document.addEventListener("keydown", (event) => {
             return;
         }
 
+        if ($("customizeModal").classList.contains("open")) {
+            closeCustomizeModal();
+            return;
+        }
+
         closeOpenMenu();
     }
 });
@@ -1250,9 +1560,27 @@ if (weatherOverrideModal) {
     });
 }
 
-const editNameBtn = $("editNameBtn");
-if (editNameBtn) {
-    editNameBtn.addEventListener("click", openNameModal);
+const nameMenuTrigger = $("nameMenuTrigger");
+const nameMenu = $("nameMenu");
+if (nameMenuTrigger && nameMenu) {
+    nameMenuTrigger.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleMenu(nameMenu, nameMenuTrigger);
+    });
+}
+
+const openNameModalBtn = $("openNameModalBtn");
+if (openNameModalBtn) {
+    openNameModalBtn.addEventListener("click", () => {
+        closeOpenMenu();
+        openNameModal();
+    });
+}
+
+const openCustomizeModalBtn = $("openCustomizeModalBtn");
+if (openCustomizeModalBtn) {
+    openCustomizeModalBtn.addEventListener("click", openCustomizeModal);
 }
 
 const nameModalForm = $("nameModalForm");
@@ -1274,6 +1602,57 @@ if (nameModal) {
     });
 }
 
+const customizeForm = $("customizeForm");
+if (customizeForm) {
+    customizeForm.addEventListener("submit", handleCustomizeSubmit);
+}
+
+const cancelCustomizeBtn = $("cancelCustomizeBtn");
+if (cancelCustomizeBtn) {
+    cancelCustomizeBtn.addEventListener("click", closeCustomizeModal);
+}
+
+const clearBackgroundBtn = $("clearBackgroundBtn");
+if (clearBackgroundBtn) {
+    clearBackgroundBtn.addEventListener("click", () => {
+        const backgroundInput = $("backgroundUrl");
+        if (backgroundInput) {
+            backgroundInput.value = "";
+        }
+        updateThemePreviewFromForm();
+    });
+}
+
+const customizeModal = $("customizeModal");
+if (customizeModal) {
+    customizeModal.addEventListener("click", (event) => {
+        if (event.target === customizeModal) {
+            closeCustomizeModal();
+        }
+    });
+}
+
+document.querySelectorAll("input[name=\"themePreset\"]").forEach((input) => {
+    input.addEventListener("change", () => {
+        updateCustomFieldsVisibility(input.value);
+        updateThemePreviewFromForm();
+    });
+});
+
+["colorBg", "colorPanel", "colorPanel2", "colorText", "colorMuted", "colorAccent", "colorBorder"].forEach(
+    (id) => {
+        const input = $(id);
+        if (input) {
+            input.addEventListener("input", updateThemePreviewFromForm);
+        }
+    }
+);
+
+const backgroundUrlInput = $("backgroundUrl");
+if (backgroundUrlInput) {
+    backgroundUrlInput.addEventListener("input", updateThemePreviewFromForm);
+}
+
 const favoritesContainer = $("favorites");
 if (favoritesContainer) {
     favoritesContainer.addEventListener("wheel", handleFavoritesWheel, {
@@ -1282,6 +1661,7 @@ if (favoritesContainer) {
 }
 
 loadDisplayName();
+loadThemeSettings();
 scheduleGreetingRefresh();
 loadWeather();
 renderFavorites();

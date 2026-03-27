@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/tabler-home.svg" />
     <style>
         :root {
-            color-scheme: dark;
+            color-scheme: light dark;
             --bg: #0f1115;
             --panel: #171a21;
             --panel-2: #1f2430;
@@ -21,6 +21,7 @@
             --menu-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
             --card-height: 150px;
             --grid-gap: 14px;
+            --bg-image: none;
         }
 
         * {
@@ -30,7 +31,12 @@
         body {
             margin: 0;
             font-family: Inter, system-ui, sans-serif;
-            background: var(--bg);
+            background-color: var(--bg);
+            background-image: var(--bg-image);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
             color: var(--text);
         }
 
@@ -66,6 +72,10 @@
             gap: 12px;
         }
 
+        .name-menu-wrap {
+            position: relative;
+        }
+
         .name-menu-trigger {
             width: 32px;
             height: 32px;
@@ -90,6 +100,40 @@
             color: var(--text);
             background: rgba(255, 255, 255, 0.06);
             border-color: var(--border);
+        }
+
+        .name-menu {
+            position: absolute;
+            right: 0;
+            top: 38px;
+            min-width: 200px;
+            background: #12161e;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--menu-shadow);
+            padding: 6px;
+            z-index: 20;
+            display: none;
+        }
+
+        .name-menu.open {
+            display: block;
+        }
+
+        .name-menu button {
+            width: 100%;
+            background: transparent;
+            border: 0;
+            color: var(--text);
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .name-menu button:hover {
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .greeting-note {
@@ -575,6 +619,119 @@
             border-color: var(--accent);
         }
 
+        .field .helper {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .theme-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+        }
+
+        .theme-option {
+            display: grid;
+            grid-template-columns: 18px 36px 1fr;
+            align-items: center;
+            column-gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #10131a;
+            cursor: pointer;
+        }
+
+        .theme-option input {
+            margin: 0;
+            justify-self: start;
+            accent-color: var(--accent);
+        }
+
+        .theme-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            flex: 0 0 auto;
+            justify-self: start;
+        }
+
+        .swatch-midnight {
+            background: linear-gradient(135deg, #0f1115, #7aa2f7);
+        }
+
+        .swatch-dusk {
+            background: linear-gradient(135deg, #11131f, #f0932b);
+        }
+
+        .swatch-forest {
+            background: linear-gradient(135deg, #0c1611, #2ecc71);
+        }
+
+        .swatch-sand {
+            background: linear-gradient(135deg, #f6f1e6, #c97b42);
+        }
+
+        .swatch-custom {
+            background: linear-gradient(135deg, #4f4f4f, #f2f2f2);
+        }
+
+        .theme-custom {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            background: #10131a;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .color-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .color-field label {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .color-field input[type="color"] {
+            width: 100%;
+            height: 38px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            padding: 0;
+            background: transparent;
+        }
+
+        .theme-preview {
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 12px;
+            background: var(--panel);
+            color: var(--text);
+            display: grid;
+            gap: 8px;
+        }
+
+        .theme-preview .preview-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text);
+            font-size: 12px;
+        }
+
         .error {
             min-height: 18px;
             color: var(--danger);
@@ -755,7 +912,14 @@
             <div class="hero-card" id="heroCard">
                 <div class="greeting-row">
                     <h1 class="greeting" id="greetingText">New Tab</h1>
-                    <button class="name-menu-trigger" type="button" id="editNameBtn" aria-label="Edit name"></button>
+                    <div class="name-menu-wrap">
+                        <button class="name-menu-trigger" type="button" id="nameMenuTrigger"
+                            aria-label="Open greeting menu"></button>
+                        <div class="name-menu" id="nameMenu" role="menu" aria-label="Greeting options">
+                            <button type="button" id="openNameModalBtn" role="menuitem">Change name...</button>
+                            <button type="button" id="openCustomizeModalBtn" role="menuitem">Customize look...</button>
+                        </div>
+                    </div>
                 </div>
                 <p class="greeting-note" id="greetingNote">Ready when you are.</p>
                 <form class="search-form" id="searchForm" role="search">
@@ -859,6 +1023,103 @@
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="cancelWeatherOverrideBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="saveWeatherOverrideBtn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="customizeModal" class="modal-backdrop" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="customizeModalTitle">
+            <h3 id="customizeModalTitle">Customize Look</h3>
+            <p>Pick a preset, then fine-tune colors or add a background image.</p>
+
+            <form id="customizeForm">
+                <div class="field">
+                    <label>Color scheme</label>
+                    <div class="theme-options">
+                        <label class="theme-option">
+                            <input type="radio" name="themePreset" value="midnight" />
+                            <span class="theme-swatch swatch-midnight"></span>
+                            <span>Midnight</span>
+                        </label>
+                        <label class="theme-option">
+                            <input type="radio" name="themePreset" value="dusk" />
+                            <span class="theme-swatch swatch-dusk"></span>
+                            <span>Dusk</span>
+                        </label>
+                        <label class="theme-option">
+                            <input type="radio" name="themePreset" value="forest" />
+                            <span class="theme-swatch swatch-forest"></span>
+                            <span>Forest</span>
+                        </label>
+                        <label class="theme-option">
+                            <input type="radio" name="themePreset" value="sand" />
+                            <span class="theme-swatch swatch-sand"></span>
+                            <span>Sand</span>
+                        </label>
+                        <label class="theme-option">
+                            <input type="radio" name="themePreset" value="custom" />
+                            <span class="theme-swatch swatch-custom"></span>
+                            <span>Custom</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field theme-custom" id="themeCustomFields">
+                    <label>Custom colors</label>
+                    <div class="color-grid">
+                        <div class="color-field">
+                            <label for="colorBg">Background</label>
+                            <input id="colorBg" type="color" />
+                        </div>
+                        <div class="color-field">
+                            <label for="colorPanel">Panel</label>
+                            <input id="colorPanel" type="color" />
+                        </div>
+                        <div class="color-field">
+                            <label for="colorPanel2">Panel Alt</label>
+                            <input id="colorPanel2" type="color" />
+                        </div>
+                        <div class="color-field">
+                            <label for="colorText">Text</label>
+                            <input id="colorText" type="color" />
+                        </div>
+                        <div class="color-field">
+                            <label for="colorMuted">Muted</label>
+                            <input id="colorMuted" type="color" />
+                        </div>
+                        <div class="color-field">
+                            <label for="colorAccent">Accent</label>
+                            <input id="colorAccent" type="color" />
+                        </div>
+                        <div class="color-field">
+                            <label for="colorBorder">Border</label>
+                            <input id="colorBorder" type="color" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="backgroundUrl">Background image URL</label>
+                    <input id="backgroundUrl" type="text" placeholder="https://example.com/image.jpg"
+                        autocomplete="off" />
+                    <div class="helper">Use a direct image URL (jpg, png, webp).</div>
+                </div>
+
+                <div class="field">
+                    <label>Preview</label>
+                    <div class="theme-preview" id="themePreview">
+                        <div class="preview-chip">Preview</div>
+                        <div>Sample text on panel</div>
+                    </div>
+                </div>
+
+                <div id="customizeError" class="error"></div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="clearBackgroundBtn">Clear background</button>
+                    <button type="button" class="btn btn-secondary" id="cancelCustomizeBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveCustomizeBtn">Save</button>
                 </div>
             </form>
         </div>
