@@ -1,13 +1,438 @@
 const FAVORITES_KEY = "favorites";
 const CUSTOM_NAMES_KEY = "customNames";
+const FAVORITES_PER_PAGE = 8;
+const WEATHER_CACHE_KEY = "weatherCache";
+const WEATHER_OVERRIDE_KEY = "weatherOverride";
+const WEATHER_CACHE_TTL = 15 * 60 * 1000;
+const DISPLAY_NAME_KEY = "displayName";
+const NAME_PROMPT_DISMISSED_KEY = "namePromptDismissed";
 
 let modalMode = "add-favorite";
 let editingTarget = null;
 let openMenu = null;
 let draggedFavoriteIndex = null;
+let currentFavoritesPage = 0;
+let displayName = "";
+let namePromptDismissed = false;
 
 function $(id) {
     return document.getElementById(id);
+}
+
+function getGreetingMessage(name = "", date = new Date()) {
+    const hour = date.getHours();
+    const suffix = name ? `, ${name}` : "";
+    if (hour < 12) {
+        return `Good morning${suffix}.`;
+    }
+    if (hour < 18) {
+        return `Good afternoon${suffix}.`;
+    }
+    return `Good evening${suffix}.`;
+}
+
+async function loadDisplayName() {
+    const result = await chrome.storage.local.get([
+        DISPLAY_NAME_KEY,
+        NAME_PROMPT_DISMISSED_KEY
+    ]);
+    displayName = (result[DISPLAY_NAME_KEY] || "").trim();
+    namePromptDismissed = Boolean(result[NAME_PROMPT_DISMISSED_KEY]);
+    updateGreeting();
+    updateNameUi();
+}
+
+async function saveDisplayName(name) {
+    displayName = name.trim();
+    await chrome.storage.local.set({ [DISPLAY_NAME_KEY]: displayName });
+}
+
+async function saveNamePromptDismissed(value) {
+    namePromptDismissed = value;
+    await chrome.storage.local.set({ [NAME_PROMPT_DISMISSED_KEY]: value });
+}
+
+function getGreetingNote(date = new Date()) {
+    const hour = date.getHours();
+    if (hour < 12) {
+        return "Start your day with a clear focus.";
+    }
+    if (hour < 18) {
+        return "Keep the momentum going.";
+    }
+    return "Time to wind down and wrap up.";
+}
+
+function updateGreeting() {
+    const greetingEl = $("greetingText");
+    const noteEl = $("greetingNote");
+    const fullGreeting = getGreetingMessage(displayName);
+    if (greetingEl) {
+        greetingEl.textContent = fullGreeting;
+    }
+    if (noteEl) {
+        noteEl.textContent = getGreetingNote();
+    }
+}
+
+function showNamePrompt({ focus = true } = {}) {
+    const prompt = $("namePrompt");
+    const input = $("nameInput");
+    const error = $("nameError");
+    if (prompt) {
+        prompt.classList.remove("hidden");
+    }
+    if (error) {
+        error.textContent = "";
+    }
+    if (input) {
+        input.value = displayName || "";
+        if (focus) {
+            input.focus();
+            input.select();
+        }
+    }
+}
+
+function hideNamePrompt() {
+    const prompt = $("namePrompt");
+    const error = $("nameError");
+    if (prompt) {
+        prompt.classList.add("hidden");
+    }
+    if (error) {
+        error.textContent = "";
+    }
+}
+
+function updateNameUi() {
+    const editBtn = $("editNameBtn");
+    const heroCard = $("heroCard");
+    if (displayName) {
+        if (editBtn) {
+            editBtn.classList.remove("is-hidden");
+        }
+        hideNamePrompt();
+        if (heroCard) {
+            heroCard.classList.remove("name-mode");
+        }
+    } else {
+        if (namePromptDismissed) {
+            if (editBtn) {
+                editBtn.classList.remove("is-hidden");
+            }
+            hideNamePrompt();
+            if (heroCard) {
+                heroCard.classList.remove("name-mode");
+            }
+        } else {
+            if (editBtn) {
+                editBtn.classList.add("is-hidden");
+            }
+            showNamePrompt({ focus: true });
+            if (heroCard) {
+                heroCard.classList.add("name-mode");
+            }
+        }
+    }
+}
+
+async function handleSaveName() {
+    const input = $("nameInput");
+    const error = $("nameError");
+    const value = input ? input.value.trim() : "";
+
+    if (!value) {
+        if (error) {
+            error.textContent = "Please enter a name.";
+        }
+        return;
+    }
+
+    if (error) {
+        error.textContent = "";
+    }
+
+    await saveDisplayName(value);
+    await saveNamePromptDismissed(false);
+    updateGreeting();
+    updateNameUi();
+}
+
+async function handleDismissNamePrompt() {
+    await saveNamePromptDismissed(true);
+    updateGreeting();
+    updateNameUi();
+}
+
+function scheduleGreetingRefresh() {
+    const now = new Date();
+    const nextHour = new Date(now);
+    nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+    const delay = nextHour.getTime() - now.getTime();
+    window.setTimeout(() => {
+        updateGreeting();
+        scheduleGreetingRefresh();
+    }, delay);
+}
+
+function formatUpdateTime(date) {
+    return `Updated ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function getWeatherDescription(code) {
+    if (code === 0) return "Clear sky";
+    if (code >= 1 && code <= 3) return "Partly cloudy";
+    if (code === 45 || code === 48) return "Fog";
+    if (code >= 51 && code <= 57) return "Drizzle";
+    if (code >= 61 && code <= 67) return "Rain";
+    if (code >= 71 && code <= 77) return "Snow";
+    if (code >= 80 && code <= 82) return "Rain showers";
+    if (code >= 85 && code <= 86) return "Snow showers";
+    if (code >= 95 && code <= 99) return "Thunderstorm";
+    return "Unknown";
+}
+
+async function getWeatherOverride() {
+    const result = await chrome.storage.local.get(WEATHER_OVERRIDE_KEY);
+    return result[WEATHER_OVERRIDE_KEY] ?? null;
+}
+
+async function saveWeatherOverride(override) {
+    await chrome.storage.local.set({ [WEATHER_OVERRIDE_KEY]: override });
+}
+
+async function clearWeatherOverride() {
+    await chrome.storage.local.remove(WEATHER_OVERRIDE_KEY);
+}
+
+async function getWeatherCache() {
+    const result = await chrome.storage.local.get(WEATHER_CACHE_KEY);
+    return result[WEATHER_CACHE_KEY] ?? null;
+}
+
+async function saveWeatherCache(cache) {
+    await chrome.storage.local.set({ [WEATHER_CACHE_KEY]: cache });
+}
+
+function setWeatherError(message) {
+    const errorEl = $("weatherError");
+    if (errorEl) {
+        errorEl.textContent = message || "";
+    }
+}
+
+function updateWeatherDisplay({
+    locationName,
+    temperatureText,
+    conditionText,
+    metaText
+}) {
+    if ($("weatherLocation")) {
+        $("weatherLocation").textContent = locationName || "Unknown";
+    }
+    if ($("weatherTemp")) {
+        $("weatherTemp").textContent = temperatureText || "--";
+    }
+    if ($("weatherCondition")) {
+        $("weatherCondition").textContent = conditionText || "--";
+    }
+    if ($("weatherMeta")) {
+        $("weatherMeta").textContent = metaText || "";
+    }
+}
+
+async function geocodeLocation(name) {
+    const response = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+            name
+        )}&count=1&language=en&format=json`
+    );
+
+    if (!response.ok) {
+        throw new Error("Could not resolve that location.");
+    }
+
+    const data = await response.json();
+    if (!data.results || !data.results.length) {
+        throw new Error("Location not found.");
+    }
+
+    const result = data.results[0];
+    return {
+        name: result.name,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        region: result.admin1,
+        country: result.country_code
+    };
+}
+
+async function fetchWeather(latitude, longitude) {
+    const useFahrenheit = navigator.language === "en-US";
+    const temperatureUnit = useFahrenheit ? "fahrenheit" : "celsius";
+    const unitLabel = useFahrenheit ? "°F" : "°C";
+
+    const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=${temperatureUnit}&timezone=auto`
+    );
+
+    if (!response.ok) {
+        throw new Error("Weather service is unavailable.");
+    }
+
+    const data = await response.json();
+    if (!data.current) {
+        throw new Error("Weather data missing.");
+    }
+
+    return {
+        temperature: `${Math.round(data.current.temperature_2m)}${unitLabel}`,
+        code: data.current.weather_code
+    };
+}
+
+function getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error("Geolocation not supported."));
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: false,
+            timeout: 8000,
+            maximumAge: 60000
+        });
+    });
+}
+
+async function loadWeather({ forceDevice = false } = {}) {
+    const override = forceDevice ? null : await getWeatherOverride();
+    const cache = await getWeatherCache();
+    const now = Date.now();
+
+    const overrideInput = $("weatherOverrideInput");
+    if (overrideInput) {
+        overrideInput.value = override ? override.name : "";
+    }
+
+    const cacheIsFresh =
+        cache &&
+        now - cache.timestamp < WEATHER_CACHE_TTL &&
+        ((override && cache.source === "override" && cache.locationName === override.name) ||
+            (!override && cache.source === "device"));
+
+    if (cacheIsFresh) {
+        updateWeatherDisplay({
+            locationName: cache.locationName,
+            temperatureText: cache.temperature,
+            conditionText: getWeatherDescription(cache.code),
+            metaText: formatUpdateTime(new Date(cache.timestamp))
+        });
+    }
+
+    try {
+        setWeatherError("");
+
+        let locationName = "";
+        let latitude = 0;
+        let longitude = 0;
+        let source = "device";
+
+        if (override) {
+            ({ latitude, longitude } = override);
+            locationName = override.name;
+            source = "override";
+        } else {
+            updateWeatherDisplay({
+                locationName: "Locating...",
+                temperatureText: cacheIsFresh ? cache.temperature : "--",
+                conditionText: cacheIsFresh ? getWeatherDescription(cache.code) : "--",
+                metaText: "Requesting device location..."
+            });
+
+            const position = await getCurrentPosition();
+            latitude = position.coords.latitude;
+            longitude = position.coords.longitude;
+            locationName = "Current location";
+        }
+
+        const weather = await fetchWeather(latitude, longitude);
+        const updatedAt = new Date();
+
+        updateWeatherDisplay({
+            locationName,
+            temperatureText: weather.temperature,
+            conditionText: getWeatherDescription(weather.code),
+            metaText: formatUpdateTime(updatedAt)
+        });
+
+        await saveWeatherCache({
+            timestamp: updatedAt.getTime(),
+            locationName,
+            latitude,
+            longitude,
+            temperature: weather.temperature,
+            code: weather.code,
+            source
+        });
+    } catch (error) {
+        setWeatherError(error.message || "Could not load weather.");
+        updateWeatherDisplay({
+            locationName: override ? override.name : "Location unavailable",
+            temperatureText: "--",
+            conditionText: "--",
+            metaText: "" 
+        });
+    }
+}
+
+async function handleWeatherOverride() {
+    const input = $("weatherOverrideInput");
+    const name = input ? input.value.trim() : "";
+
+    if (!name) {
+        setWeatherError("Enter a city to override location.");
+        return;
+    }
+
+    try {
+        setWeatherError("");
+        const result = await geocodeLocation(name);
+        const locationLabel = [result.name, result.region, result.country]
+            .filter(Boolean)
+            .join(", ");
+
+        await saveWeatherOverride({
+            name: locationLabel,
+            latitude: result.latitude,
+            longitude: result.longitude
+        });
+
+        if (input) {
+            input.value = locationLabel;
+        }
+
+        await loadWeather();
+    } catch (error) {
+        setWeatherError(error.message || "Could not set override location.");
+    }
+}
+
+async function handleUseDeviceLocation() {
+    await clearWeatherOverride();
+    await loadWeather({ forceDevice: true });
+}
+
+function handleSearchSubmit(event) {
+    event.preventDefault();
+    const input = $("searchInput");
+    if (!input) return;
+    const query = input.value.trim();
+    if (!query) return;
+    const url = `https://search.brave.com/search?q=${encodeURIComponent(query)}`;
+    window.location.assign(url);
 }
 
 async function getFavorites() {
@@ -156,7 +581,20 @@ async function renderFavorites() {
 
     const favorites = await getFavorites();
 
+    const totalSlots = favorites.length + 1;
+    const totalPages = Math.max(1, Math.ceil(totalSlots / FAVORITES_PER_PAGE));
+    if (currentFavoritesPage > totalPages - 1) {
+        currentFavoritesPage = totalPages - 1;
+    }
+
+    const pageStart = currentFavoritesPage * FAVORITES_PER_PAGE;
+    const pageEnd = pageStart + FAVORITES_PER_PAGE;
+
     for (const [index, fav] of favorites.entries()) {
+        if (index < pageStart || index >= pageEnd) {
+            continue;
+        }
+
         container.appendChild(
             makeCard(fav, {
                 isFavorite: true,
@@ -173,7 +611,42 @@ async function renderFavorites() {
         );
     }
 
-    container.appendChild(makeAddCard());
+    const addCardSlot = favorites.length;
+    if (addCardSlot >= pageStart && addCardSlot < pageEnd) {
+        container.appendChild(makeAddCard());
+    }
+
+    renderFavoritesPagination(totalPages);
+}
+
+function renderFavoritesPagination(totalPages) {
+    const container = $("favoritesPagination");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (totalPages <= 1) {
+        container.style.display = "none";
+        return;
+    }
+
+    container.style.display = "flex";
+
+    for (let page = 0; page < totalPages; page += 1) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "page-bubble";
+        if (page === currentFavoritesPage) {
+            button.classList.add("active");
+        }
+        button.setAttribute("aria-label", `Favorites page ${page + 1}`);
+        button.addEventListener("click", () => {
+            if (page === currentFavoritesPage) return;
+            currentFavoritesPage = page;
+            renderFavorites();
+        });
+        container.appendChild(button);
+    }
 }
 
 async function renderTopSites() {
@@ -253,7 +726,10 @@ function openFavoriteModalBase({
 
     $("favoriteUrl").value = url;
     $("favoriteName").value = name;
+
     $("favoriteUrl").disabled = lockUrl;
+    $("favoriteUrl").required = !lockUrl;
+    $("favoriteName").required = false;
 
     $("favoriteModal").classList.add("open");
     $("favoriteModal").setAttribute("aria-hidden", "false");
@@ -663,5 +1139,61 @@ $("favoriteUrl").addEventListener("blur", () => {
     }
 });
 
+const searchForm = $("searchForm");
+if (searchForm) {
+    searchForm.addEventListener("submit", handleSearchSubmit);
+}
+
+const setWeatherOverrideBtn = $("setWeatherOverride");
+if (setWeatherOverrideBtn) {
+    setWeatherOverrideBtn.addEventListener("click", handleWeatherOverride);
+}
+
+const useDeviceLocationBtn = $("useDeviceLocation");
+if (useDeviceLocationBtn) {
+    useDeviceLocationBtn.addEventListener("click", handleUseDeviceLocation);
+}
+
+const weatherOverrideInput = $("weatherOverrideInput");
+if (weatherOverrideInput) {
+    weatherOverrideInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            handleWeatherOverride();
+        }
+    });
+}
+
+const editNameBtn = $("editNameBtn");
+if (editNameBtn) {
+    editNameBtn.addEventListener("click", async () => {
+        await saveNamePromptDismissed(false);
+        updateNameUi();
+    });
+}
+
+const saveNameBtn = $("saveNameBtn");
+if (saveNameBtn) {
+    saveNameBtn.addEventListener("click", handleSaveName);
+}
+
+const dismissNameBtn = $("dismissNameBtn");
+if (dismissNameBtn) {
+    dismissNameBtn.addEventListener("click", handleDismissNamePrompt);
+}
+
+const nameInput = $("nameInput");
+if (nameInput) {
+    nameInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            handleSaveName();
+        }
+    });
+}
+
+loadDisplayName();
+scheduleGreetingRefresh();
+loadWeather();
 renderFavorites();
 renderTopSites();
