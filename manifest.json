@@ -1,0 +1,10 @@
+{
+    "manifest_version": 3,
+    "name": "Home Page",
+    "version": "0.1.0",
+    "description": "Pinned favorites and most visited sites on the new tab page.",
+    "permissions": ["storage", "topSites", "favicon"],
+    "chrome_url_overrides": {
+        "newtab": "newtab.html"
+    }
+}
