@@ -38,7 +38,7 @@
             display: grid;
             grid-template-columns: 1.2fr 0.8fr;
             gap: 20px;
-            align-items: start;
+            align-items: baseline;
             margin-bottom: 28px;
         }
 
@@ -48,22 +48,6 @@
             box-shadow: none;
         }
 
-        .hero-card.name-mode {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 220px;
-        }
-
-        .hero-card.name-mode .greeting-row,
-        .hero-card.name-mode .greeting-note,
-        .hero-card.name-mode .search-form {
-            display: none;
-        }
-
-        .hero-card.name-mode .name-prompt {
-            margin: 0;
-        }
 
         #heroCard {
             padding: 0 18px 0 0;
@@ -82,14 +66,30 @@
             gap: 12px;
         }
 
-        .name-edit {
-            border: 0;
+        .name-menu-trigger {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            border: 1px solid transparent;
             background: transparent;
-            color: var(--text);
-            border-radius: 999px;
-            padding: 6px 10px;
-            font-size: 12px;
+            color: var(--muted);
             cursor: pointer;
+            display: grid;
+            place-items: center;
+        }
+
+        .name-menu-trigger::before {
+            content: "⋯";
+            font-size: 20px;
+            line-height: 1;
+            transform: translateY(-2px);
+        }
+
+        .name-menu-trigger:hover,
+        .name-menu-trigger:focus-visible {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: var(--border);
         }
 
         .greeting-note {
@@ -98,70 +98,8 @@
             margin: 0 0 16px;
         }
 
-        .name-prompt {
-            margin: 12px 0 14px;
-            padding: 12px;
-            border: 0;
-            border-radius: 14px;
-            background: transparent;
-        }
-
-        .name-prompt.hidden {
-            display: none;
-        }
-
         .is-hidden {
             display: none;
-        }
-
-        .name-prompt label {
-            display: block;
-            font-size: 12px;
-            color: var(--muted);
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .name-prompt .row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .name-prompt input {
-            flex: 1;
-            min-width: 160px;
-            background: #10131a;
-            border: 1px solid var(--border);
-            color: var(--text);
-            border-radius: 10px;
-            padding: 8px 10px;
-            font: inherit;
-            outline: none;
-        }
-
-        .name-prompt button {
-            border: 0;
-            background: transparent;
-            color: var(--text);
-            border-radius: 10px;
-            padding: 8px 12px;
-            font: inherit;
-            cursor: pointer;
-        }
-
-        .name-prompt button.primary {
-            background: var(--accent);
-            color: white;
-            border-color: transparent;
-            font-weight: 600;
-        }
-
-        .name-error {
-            color: var(--danger);
-            font-size: 12px;
-            min-height: 16px;
-            margin-top: 6px;
         }
 
         .search-form {
@@ -207,6 +145,7 @@
             border: 0;
             padding: 0 0 0 18px;
             min-height: 140px;
+            position: relative;
         }
 
         .weather-head {
@@ -214,6 +153,13 @@
             align-items: center;
             justify-content: space-between;
             gap: 10px;
+        }
+
+        .weather-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
 
         .weather-title {
@@ -250,45 +196,71 @@
             color: var(--muted);
         }
 
-        .weather-controls {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .weather-controls input {
-            flex: 1;
-            min-width: 160px;
-            background: #10131a;
-            border: 1px solid var(--border);
-            color: var(--text);
+        .weather-menu-trigger {
+            width: 30px;
+            height: 30px;
             border-radius: 10px;
-            padding: 8px 10px;
-            font: inherit;
-            outline: none;
-        }
-
-        .weather-controls button {
-            border: 0;
+            border: 1px solid transparent;
             background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+        }
+
+        .weather-menu-trigger::before {
+            content: "⋯";
+            font-size: 18px;
+            line-height: 1;
+            transform: translateY(-2px);
+        }
+
+        .weather-menu-trigger:hover,
+        .weather-menu-trigger.open,
+        .weather-menu-trigger:focus-visible {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: var(--border);
             color: var(--text);
-            border-radius: 10px;
-            padding: 8px 10px;
+        }
+
+        .weather-menu {
+            position: absolute;
+            right: 0;
+            top: 36px;
+            min-width: 200px;
+            background: #12161e;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--menu-shadow);
+            padding: 6px;
+            z-index: 20;
+            display: none;
+        }
+
+        .weather-menu.open {
+            display: block;
+        }
+
+        .weather-menu button {
+            width: 100%;
+            background: transparent;
+            border: 0;
+            color: var(--text);
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 8px;
             font: inherit;
             cursor: pointer;
+        }
+
+        .weather-menu button:hover {
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .hero input:not(#searchInput):focus-visible,
         .hero button:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 2px;
-        }
-
-        .weather-controls button.primary {
-            background: var(--accent);
-            border-color: transparent;
-            color: white;
-            font-weight: 600;
         }
 
         .weather-error {
@@ -783,38 +755,32 @@
             <div class="hero-card" id="heroCard">
                 <div class="greeting-row">
                     <h1 class="greeting" id="greetingText">New Tab</h1>
-                    <button class="name-edit is-hidden" type="button" id="editNameBtn">Edit name</button>
+                    <button class="name-menu-trigger" type="button" id="editNameBtn" aria-label="Edit name"></button>
                 </div>
                 <p class="greeting-note" id="greetingNote">Ready when you are.</p>
-                <div class="name-prompt hidden" id="namePrompt">
-                    <label for="nameInput">What should we call you?</label>
-                    <div class="row">
-                        <input id="nameInput" type="text" placeholder="Your name" autocomplete="off" />
-                        <button class="primary" type="button" id="saveNameBtn">Save</button>
-                        <button type="button" id="dismissNameBtn">Not now</button>
-                    </div>
-                    <div class="name-error" id="nameError"></div>
-                </div>
                 <form class="search-form" id="searchForm" role="search">
                     <input id="searchInput" type="search" placeholder="Search with Brave" autocomplete="off" />
                     <button type="submit">Search</button>
                 </form>
             </div>
             <div class="weather-card" id="weatherCard" aria-live="polite">
-                <div class="weather-head">
-                    <div class="weather-title">Weather</div>
-                    <div class="weather-location" id="weatherLocation">Locating...</div>
+            <div class="weather-head">
+                <div class="weather-title">Weather</div>
+                <div class="weather-location" id="weatherLocation">Locating...</div>
+            </div>
+                <div class="weather-menu" id="weatherMenu" role="menu" aria-label="Weather options">
+                    <button type="button" id="weatherOverrideBtn" role="menuitem">Set location override...</button>
+                    <button type="button" id="weatherDeviceBtn" role="menuitem">Use device location</button>
                 </div>
                 <div class="weather-main">
                     <div class="weather-temp" id="weatherTemp">--</div>
                     <div class="weather-condition" id="weatherCondition">--</div>
                 </div>
+            <div class="weather-meta-row">
                 <div class="weather-meta" id="weatherMeta">Waiting for location permission.</div>
-                <div class="weather-controls">
-                    <input id="weatherOverrideInput" type="text" placeholder="Override location (city)" autocomplete="off" />
-                    <button class="primary" type="button" id="setWeatherOverride">Set</button>
-                    <button type="button" id="useDeviceLocation">Use device location</button>
-                </div>
+                <button class="weather-menu-trigger" type="button" id="weatherMenuTrigger"
+                    aria-label="Weather options"></button>
+            </div>
                 <div class="weather-error" id="weatherError"></div>
             </div>
         </div>
@@ -851,6 +817,48 @@
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="cancelFavoriteBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="saveFavoriteBtn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="nameModal" class="modal-backdrop" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle">
+            <h3 id="nameModalTitle">Change Name</h3>
+            <p>Update the name used in your greeting.</p>
+
+            <form id="nameModalForm">
+                <div class="field">
+                    <label for="nameModalInput">Name</label>
+                    <input id="nameModalInput" type="text" placeholder="Your name" autocomplete="off" />
+                </div>
+
+                <div id="nameModalError" class="error"></div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelNameModalBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveNameModalBtn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="weatherOverrideModal" class="modal-backdrop" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="weatherOverrideModalTitle">
+            <h3 id="weatherOverrideModalTitle">Override Location</h3>
+            <p>Enter a city to use for weather updates.</p>
+
+            <form id="weatherOverrideForm">
+                <div class="field">
+                    <label for="weatherOverrideModalInput">City</label>
+                    <input id="weatherOverrideModalInput" type="text" placeholder="City name" autocomplete="off" />
+                </div>
+
+                <div id="weatherOverrideModalError" class="error"></div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelWeatherOverrideBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveWeatherOverrideBtn">Save</button>
                 </div>
             </form>
         </div>

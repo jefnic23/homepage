@@ -5,7 +5,6 @@ const WEATHER_CACHE_KEY = "weatherCache";
 const WEATHER_OVERRIDE_KEY = "weatherOverride";
 const WEATHER_CACHE_TTL = 15 * 60 * 1000;
 const DISPLAY_NAME_KEY = "displayName";
-const NAME_PROMPT_DISMISSED_KEY = "namePromptDismissed";
 const WHEEL_PAGE_COOLDOWN = 350;
 
 let modalMode = "add-favorite";
@@ -16,7 +15,6 @@ let currentFavoritesPage = 0;
 let totalFavoritesPages = 1;
 let lastFavoritesWheelAt = 0;
 let displayName = "";
-let namePromptDismissed = false;
 
 function $(id) {
     return document.getElementById(id);
@@ -35,12 +33,8 @@ function getGreetingMessage(name = "", date = new Date()) {
 }
 
 async function loadDisplayName() {
-    const result = await chrome.storage.local.get([
-        DISPLAY_NAME_KEY,
-        NAME_PROMPT_DISMISSED_KEY
-    ]);
+    const result = await chrome.storage.local.get([DISPLAY_NAME_KEY]);
     displayName = (result[DISPLAY_NAME_KEY] || "").trim();
-    namePromptDismissed = Boolean(result[NAME_PROMPT_DISMISSED_KEY]);
     updateGreeting();
     updateNameUi();
 }
@@ -48,11 +42,6 @@ async function loadDisplayName() {
 async function saveDisplayName(name) {
     displayName = name.trim();
     await chrome.storage.local.set({ [DISPLAY_NAME_KEY]: displayName });
-}
-
-async function saveNamePromptDismissed(value) {
-    namePromptDismissed = value;
-    await chrome.storage.local.set({ [NAME_PROMPT_DISMISSED_KEY]: value });
 }
 
 function getGreetingNote(date = new Date()) {
@@ -78,71 +67,49 @@ function updateGreeting() {
     }
 }
 
-function showNamePrompt({ focus = true } = {}) {
-    const prompt = $("namePrompt");
-    const input = $("nameInput");
-    const error = $("nameError");
-    if (prompt) {
-        prompt.classList.remove("hidden");
+function updateNameUi() {
+    const editBtn = $("editNameBtn");
+    if (editBtn) {
+        editBtn.classList.remove("is-hidden");
     }
+}
+
+function openNameModal() {
+    const modal = $("nameModal");
+    const input = $("nameModalInput");
+    const error = $("nameModalError");
     if (error) {
         error.textContent = "";
     }
     if (input) {
         input.value = displayName || "";
-        if (focus) {
-            input.focus();
-            input.select();
-        }
+    }
+    if (modal) {
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+    }
+    if (input) {
+        input.focus();
+        input.select();
     }
 }
 
-function hideNamePrompt() {
-    const prompt = $("namePrompt");
-    const error = $("nameError");
-    if (prompt) {
-        prompt.classList.add("hidden");
+function closeNameModal() {
+    const modal = $("nameModal");
+    const error = $("nameModalError");
+    if (modal) {
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
     }
     if (error) {
         error.textContent = "";
     }
 }
 
-function updateNameUi() {
-    const editBtn = $("editNameBtn");
-    const heroCard = $("heroCard");
-    if (displayName) {
-        if (editBtn) {
-            editBtn.classList.remove("is-hidden");
-        }
-        hideNamePrompt();
-        if (heroCard) {
-            heroCard.classList.remove("name-mode");
-        }
-    } else {
-        if (namePromptDismissed) {
-            if (editBtn) {
-                editBtn.classList.remove("is-hidden");
-            }
-            hideNamePrompt();
-            if (heroCard) {
-                heroCard.classList.remove("name-mode");
-            }
-        } else {
-            if (editBtn) {
-                editBtn.classList.add("is-hidden");
-            }
-            showNamePrompt({ focus: true });
-            if (heroCard) {
-                heroCard.classList.add("name-mode");
-            }
-        }
-    }
-}
-
-async function handleSaveName() {
-    const input = $("nameInput");
-    const error = $("nameError");
+async function handleNameModalSubmit(event) {
+    event.preventDefault();
+    const input = $("nameModalInput");
+    const error = $("nameModalError");
     const value = input ? input.value.trim() : "";
 
     if (!value) {
@@ -157,15 +124,9 @@ async function handleSaveName() {
     }
 
     await saveDisplayName(value);
-    await saveNamePromptDismissed(false);
     updateGreeting();
     updateNameUi();
-}
-
-async function handleDismissNamePrompt() {
-    await saveNamePromptDismissed(true);
-    updateGreeting();
-    updateNameUi();
+    closeNameModal();
 }
 
 function scheduleGreetingRefresh() {
@@ -315,7 +276,7 @@ async function loadWeather({ forceDevice = false } = {}) {
     const cache = await getWeatherCache();
     const now = Date.now();
 
-    const overrideInput = $("weatherOverrideInput");
+    const overrideInput = $("weatherOverrideModalInput");
     if (overrideInput) {
         overrideInput.value = override ? override.name : "";
     }
@@ -391,18 +352,25 @@ async function loadWeather({ forceDevice = false } = {}) {
     }
 }
 
-async function handleWeatherOverride() {
-    const input = $("weatherOverrideInput");
-    const name = input ? input.value.trim() : "";
+async function handleWeatherOverride(name, errorEl = null) {
+    const value = (name || "").trim();
 
-    if (!name) {
-        setWeatherError("Enter a city to override location.");
-        return;
+    if (!value) {
+        const message = "Enter a city to override location.";
+        setWeatherError(message);
+        if (errorEl) {
+            errorEl.textContent = message;
+        }
+        return false;
     }
 
     try {
         setWeatherError("");
-        const result = await geocodeLocation(name);
+        if (errorEl) {
+            errorEl.textContent = "";
+        }
+
+        const result = await geocodeLocation(value);
         const locationLabel = [result.name, result.region, result.country]
             .filter(Boolean)
             .join(", ");
@@ -413,19 +381,73 @@ async function handleWeatherOverride() {
             longitude: result.longitude
         });
 
-        if (input) {
-            input.value = locationLabel;
+        const overrideInput = $("weatherOverrideModalInput");
+        if (overrideInput) {
+            overrideInput.value = locationLabel;
         }
 
         await loadWeather();
+        return true;
     } catch (error) {
-        setWeatherError(error.message || "Could not set override location.");
+        const message = error.message || "Could not set override location.";
+        setWeatherError(message);
+        if (errorEl) {
+            errorEl.textContent = message;
+        }
+        return false;
     }
 }
 
 async function handleUseDeviceLocation() {
     await clearWeatherOverride();
     await loadWeather({ forceDevice: true });
+}
+
+async function openWeatherOverrideModal() {
+    closeOpenMenu();
+    const modal = $("weatherOverrideModal");
+    const input = $("weatherOverrideModalInput");
+    const error = $("weatherOverrideModalError");
+    if (error) {
+        error.textContent = "";
+    }
+
+    if (input) {
+        const override = await getWeatherOverride();
+        input.value = override ? override.name : "";
+    }
+
+    if (modal) {
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    if (input) {
+        input.focus();
+        input.select();
+    }
+}
+
+function closeWeatherOverrideModal() {
+    const modal = $("weatherOverrideModal");
+    const error = $("weatherOverrideModalError");
+    if (modal) {
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+    }
+    if (error) {
+        error.textContent = "";
+    }
+}
+
+async function handleWeatherOverrideSubmit(event) {
+    event.preventDefault();
+    const input = $("weatherOverrideModalInput");
+    const error = $("weatherOverrideModalError");
+    const success = await handleWeatherOverride(input ? input.value : "", error);
+    if (success) {
+        closeWeatherOverrideModal();
+    }
 }
 
 function handleSearchSubmit(event) {
@@ -1151,6 +1173,16 @@ document.addEventListener("keydown", (event) => {
             return;
         }
 
+        if ($("nameModal").classList.contains("open")) {
+            closeNameModal();
+            return;
+        }
+
+        if ($("weatherOverrideModal").classList.contains("open")) {
+            closeWeatherOverrideModal();
+            return;
+        }
+
         closeOpenMenu();
     }
 });
@@ -1176,50 +1208,68 @@ if (searchForm) {
     searchForm.addEventListener("submit", handleSearchSubmit);
 }
 
-const setWeatherOverrideBtn = $("setWeatherOverride");
-if (setWeatherOverrideBtn) {
-    setWeatherOverrideBtn.addEventListener("click", handleWeatherOverride);
+const weatherMenuTrigger = $("weatherMenuTrigger");
+const weatherMenu = $("weatherMenu");
+if (weatherMenuTrigger && weatherMenu) {
+    weatherMenuTrigger.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleMenu(weatherMenu, weatherMenuTrigger);
+    });
 }
 
-const useDeviceLocationBtn = $("useDeviceLocation");
-if (useDeviceLocationBtn) {
-    useDeviceLocationBtn.addEventListener("click", handleUseDeviceLocation);
+const weatherOverrideBtn = $("weatherOverrideBtn");
+if (weatherOverrideBtn) {
+    weatherOverrideBtn.addEventListener("click", openWeatherOverrideModal);
 }
 
-const weatherOverrideInput = $("weatherOverrideInput");
-if (weatherOverrideInput) {
-    weatherOverrideInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            handleWeatherOverride();
+const weatherDeviceBtn = $("weatherDeviceBtn");
+if (weatherDeviceBtn) {
+    weatherDeviceBtn.addEventListener("click", async () => {
+        closeOpenMenu();
+        await handleUseDeviceLocation();
+    });
+}
+
+const weatherOverrideForm = $("weatherOverrideForm");
+if (weatherOverrideForm) {
+    weatherOverrideForm.addEventListener("submit", handleWeatherOverrideSubmit);
+}
+
+const cancelWeatherOverrideBtn = $("cancelWeatherOverrideBtn");
+if (cancelWeatherOverrideBtn) {
+    cancelWeatherOverrideBtn.addEventListener("click", closeWeatherOverrideModal);
+}
+
+const weatherOverrideModal = $("weatherOverrideModal");
+if (weatherOverrideModal) {
+    weatherOverrideModal.addEventListener("click", (event) => {
+        if (event.target === weatherOverrideModal) {
+            closeWeatherOverrideModal();
         }
     });
 }
 
 const editNameBtn = $("editNameBtn");
 if (editNameBtn) {
-    editNameBtn.addEventListener("click", async () => {
-        await saveNamePromptDismissed(false);
-        updateNameUi();
-    });
+    editNameBtn.addEventListener("click", openNameModal);
 }
 
-const saveNameBtn = $("saveNameBtn");
-if (saveNameBtn) {
-    saveNameBtn.addEventListener("click", handleSaveName);
+const nameModalForm = $("nameModalForm");
+if (nameModalForm) {
+    nameModalForm.addEventListener("submit", handleNameModalSubmit);
 }
 
-const dismissNameBtn = $("dismissNameBtn");
-if (dismissNameBtn) {
-    dismissNameBtn.addEventListener("click", handleDismissNamePrompt);
+const cancelNameModalBtn = $("cancelNameModalBtn");
+if (cancelNameModalBtn) {
+    cancelNameModalBtn.addEventListener("click", closeNameModal);
 }
 
-const nameInput = $("nameInput");
-if (nameInput) {
-    nameInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            handleSaveName();
+const nameModal = $("nameModal");
+if (nameModal) {
+    nameModal.addEventListener("click", (event) => {
+        if (event.target === nameModal) {
+            closeNameModal();
         }
     });
 }
