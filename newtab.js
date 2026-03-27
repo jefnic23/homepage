@@ -545,6 +545,93 @@ function getWeatherDescription(code) {
     return "Unknown";
 }
 
+const WEATHER_ICONS = {
+    clear: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+        </svg>
+    `,
+    "partly-cloudy": `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 6a4 4 0 0 1 7.5 2"></path>
+            <path d="M6 18h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+        </svg>
+    `,
+    fog: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h12a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M5 19h14"></path>
+            <path d="M7 21h10"></path>
+        </svg>
+    `,
+    drizzle: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M9 19v2"></path>
+            <path d="M13 19v2"></path>
+        </svg>
+    `,
+    rain: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M8 19v2"></path>
+            <path d="M12 19v2"></path>
+            <path d="M16 19v2"></path>
+        </svg>
+    `,
+    snow: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M9 19l1 1m0-1l-1 1"></path>
+            <path d="M13 19l1 1m0-1l-1 1"></path>
+        </svg>
+    `,
+    "rain-showers": `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M10 19v2"></path>
+            <path d="M14 19v2"></path>
+        </svg>
+    `,
+    "snow-showers": `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M10 19l1 1m0-1l-1 1"></path>
+            <path d="M14 19l1 1m0-1l-1 1"></path>
+        </svg>
+    `,
+    thunderstorm: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 15h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+            <path d="M12 16l-2 4h3l-2 4"></path>
+        </svg>
+    `,
+    unknown: `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 16h10a4 4 0 0 0 0-8 5 5 0 0 0-9.4 1.8"></path>
+        </svg>
+    `
+};
+
+function getWeatherIconKey(code) {
+    if (code === 0) return "clear";
+    if (code >= 1 && code <= 3) return "partly-cloudy";
+    if (code === 45 || code === 48) return "fog";
+    if (code >= 51 && code <= 57) return "drizzle";
+    if (code >= 61 && code <= 67) return "rain";
+    if (code >= 71 && code <= 77) return "snow";
+    if (code >= 80 && code <= 82) return "rain-showers";
+    if (code >= 85 && code <= 86) return "snow-showers";
+    if (code >= 95 && code <= 99) return "thunderstorm";
+    return "unknown";
+}
+
+function getWeatherIconMarkup(code) {
+    const key = getWeatherIconKey(code);
+    return WEATHER_ICONS[key] || "";
+}
+
 async function getWeatherOverride() {
     const result = await chrome.storage.local.get(WEATHER_OVERRIDE_KEY);
     return result[WEATHER_OVERRIDE_KEY] ?? null;
@@ -578,7 +665,8 @@ function updateWeatherDisplay({
     locationName,
     temperatureText,
     conditionText,
-    metaText
+    metaText,
+    weatherCode
 }) {
     if ($("weatherLocation")) {
         $("weatherLocation").textContent = locationName || "Unknown";
@@ -591,6 +679,18 @@ function updateWeatherDisplay({
     }
     if ($("weatherMeta")) {
         $("weatherMeta").textContent = metaText || "";
+    }
+    if (typeof weatherCode !== "undefined") {
+        const iconEl = $("weatherIcon");
+        if (!iconEl) return;
+        const markup = weatherCode == null ? "" : getWeatherIconMarkup(weatherCode);
+        if (!markup) {
+            iconEl.innerHTML = "";
+            iconEl.classList.add("is-hidden");
+            return;
+        }
+        iconEl.innerHTML = markup;
+        iconEl.classList.remove("is-hidden");
     }
 }
 
@@ -680,7 +780,8 @@ async function loadWeather({ forceDevice = false } = {}) {
             locationName: cache.locationName,
             temperatureText: cache.temperature,
             conditionText: getWeatherDescription(cache.code),
-            metaText: formatUpdateTime(new Date(cache.timestamp))
+            metaText: formatUpdateTime(new Date(cache.timestamp)),
+            weatherCode: cache.code
         });
     }
 
@@ -701,7 +802,8 @@ async function loadWeather({ forceDevice = false } = {}) {
                 locationName: "Locating...",
                 temperatureText: cacheIsFresh ? cache.temperature : "--",
                 conditionText: cacheIsFresh ? getWeatherDescription(cache.code) : "--",
-                metaText: "Requesting device location..."
+                metaText: "Requesting device location...",
+                weatherCode: cacheIsFresh ? cache.code : null
             });
 
             const position = await getCurrentPosition();
@@ -717,7 +819,8 @@ async function loadWeather({ forceDevice = false } = {}) {
             locationName,
             temperatureText: weather.temperature,
             conditionText: getWeatherDescription(weather.code),
-            metaText: formatUpdateTime(updatedAt)
+            metaText: formatUpdateTime(updatedAt),
+            weatherCode: weather.code
         });
 
         await saveWeatherCache({
@@ -735,7 +838,8 @@ async function loadWeather({ forceDevice = false } = {}) {
             locationName: override ? override.name : "Location unavailable",
             temperatureText: "--",
             conditionText: "--",
-            metaText: "" 
+            metaText: "",
+            weatherCode: null
         });
     }
 }

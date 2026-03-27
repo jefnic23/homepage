@@ -253,6 +253,20 @@
             gap: 10px;
         }
 
+        .weather-icon {
+            width: 28px;
+            height: 28px;
+            display: grid;
+            place-items: center;
+            color: var(--accent);
+        }
+
+        .weather-icon svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
         .weather-temp {
             font-size: 28px;
             font-weight: 700;
@@ -971,6 +985,7 @@
                     <button type="button" id="weatherDeviceBtn" role="menuitem">Use device location</button>
                 </div>
                 <div class="weather-main">
+                    <div class="weather-icon is-hidden" id="weatherIcon" aria-hidden="true"></div>
                     <div class="weather-temp" id="weatherTemp">--</div>
                     <div class="weather-condition" id="weatherCondition">--</div>
                 </div>
