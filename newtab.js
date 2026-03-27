@@ -6,12 +6,15 @@ const WEATHER_OVERRIDE_KEY = "weatherOverride";
 const WEATHER_CACHE_TTL = 15 * 60 * 1000;
 const DISPLAY_NAME_KEY = "displayName";
 const NAME_PROMPT_DISMISSED_KEY = "namePromptDismissed";
+const WHEEL_PAGE_COOLDOWN = 350;
 
 let modalMode = "add-favorite";
 let editingTarget = null;
 let openMenu = null;
 let draggedFavoriteIndex = null;
 let currentFavoritesPage = 0;
+let totalFavoritesPages = 1;
+let lastFavoritesWheelAt = 0;
 let displayName = "";
 let namePromptDismissed = false;
 
@@ -583,6 +586,7 @@ async function renderFavorites() {
 
     const totalSlots = favorites.length + 1;
     const totalPages = Math.max(1, Math.ceil(totalSlots / FAVORITES_PER_PAGE));
+    totalFavoritesPages = totalPages;
     if (currentFavoritesPage > totalPages - 1) {
         currentFavoritesPage = totalPages - 1;
     }
@@ -617,6 +621,34 @@ async function renderFavorites() {
     }
 
     renderFavoritesPagination(totalPages);
+}
+
+function handleFavoritesWheel(event) {
+    if (totalFavoritesPages <= 1) return;
+    if (!event.deltaY && !event.deltaX) return;
+
+    const now = Date.now();
+    if (now - lastFavoritesWheelAt < WHEEL_PAGE_COOLDOWN) {
+        event.preventDefault();
+        return;
+    }
+
+    const dominantDelta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (!dominantDelta) return;
+
+    const direction = dominantDelta > 0 ? 1 : -1;
+    const nextPage = Math.max(
+        0,
+        Math.min(totalFavoritesPages - 1, currentFavoritesPage + direction)
+    );
+
+    if (nextPage === currentFavoritesPage) return;
+
+    currentFavoritesPage = nextPage;
+    lastFavoritesWheelAt = now;
+    event.preventDefault();
+    renderFavorites();
 }
 
 function renderFavoritesPagination(totalPages) {
@@ -1189,6 +1221,13 @@ if (nameInput) {
             event.preventDefault();
             handleSaveName();
         }
+    });
+}
+
+const favoritesContainer = $("favorites");
+if (favoritesContainer) {
+    favoritesContainer.addEventListener("wheel", handleFavoritesWheel, {
+        passive: false
     });
 }
 
