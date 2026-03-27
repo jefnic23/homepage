@@ -64,6 +64,8 @@ const THEME_DEFAULT = {
 };
 
 const COMMAND_HINT_TEXT = "Try: yt cats, gh repo, mail, docs";
+const COMMAND_HISTORY_KEY = "commandHistory";
+const COMMAND_HISTORY_LIMIT = 12;
 const COMMANDS = [
     {
         id: "youtube",
@@ -247,6 +249,24 @@ async function getThemeSettings() {
 
 async function saveThemeSettings(settings) {
     await chrome.storage.local.set({ [THEME_KEY]: settings });
+}
+
+async function getCommandHistory() {
+    const result = await chrome.storage.local.get([COMMAND_HISTORY_KEY]);
+    const history = result[COMMAND_HISTORY_KEY];
+    if (!Array.isArray(history)) return [];
+    return history.filter((entry) => typeof entry === "string");
+}
+
+async function addCommandHistory(entry) {
+    const trimmed = (entry || "").trim();
+    if (!trimmed) return;
+    const history = await getCommandHistory();
+    const filtered = history.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
+    filtered.unshift(trimmed);
+    await chrome.storage.local.set({
+        [COMMAND_HISTORY_KEY]: filtered.slice(0, COMMAND_HISTORY_LIMIT)
+    });
 }
 
 function applyThemeSettings(settings) {
@@ -864,7 +884,7 @@ function findFavoriteMatch(query, favorites) {
     });
 }
 
-function getAutocompleteSuggestion(value, favorites) {
+function getAutocompleteSuggestion(value, favorites, history) {
     const trimmed = value.trim();
     if (!trimmed) return "";
 
@@ -895,13 +915,20 @@ function getAutocompleteSuggestion(value, favorites) {
         }
     }
 
+    const historyMatch = history.find((item) =>
+        item.toLowerCase().startsWith(trimmed.toLowerCase())
+    );
+    if (historyMatch) {
+        return historyMatch;
+    }
+
     return "";
 }
 
-function updateCommandGhost(value, favorites) {
+function updateCommandGhost(value, favorites, history) {
     const ghost = $("commandGhost");
     if (!ghost) return;
-    const suggestion = getAutocompleteSuggestion(value, favorites);
+    const suggestion = getAutocompleteSuggestion(value, favorites, history);
     if (!suggestion || suggestion.toLowerCase() === value.trim().toLowerCase()) {
         ghost.textContent = "";
         return;
@@ -940,8 +967,10 @@ async function handleCommandSubmit(event) {
     event.preventDefault();
     const input = $("commandInput");
     if (!input) return;
-    const url = await resolveCommandInput(input.value);
+    const rawValue = input.value;
+    const url = await resolveCommandInput(rawValue);
     if (!url) return;
+    await addCommandHistory(rawValue);
     window.location.assign(url);
 }
 
@@ -1702,13 +1731,19 @@ if (commandForm) {
 const commandInput = $("commandInput");
 if (commandInput) {
     commandInput.addEventListener("input", async () => {
-        const favorites = await getFavorites();
-        updateCommandGhost(commandInput.value, favorites);
+        const [favorites, history] = await Promise.all([
+            getFavorites(),
+            getCommandHistory()
+        ]);
+        updateCommandGhost(commandInput.value, favorites, history);
     });
 
     commandInput.addEventListener("focus", async () => {
-        const favorites = await getFavorites();
-        updateCommandGhost(commandInput.value, favorites);
+        const [favorites, history] = await Promise.all([
+            getFavorites(),
+            getCommandHistory()
+        ]);
+        updateCommandGhost(commandInput.value, favorites, history);
     });
 
     commandInput.addEventListener("blur", () => {
@@ -1725,14 +1760,17 @@ if (commandInput) {
         const atEnd = commandInput.selectionStart === value.length;
         if (!atEnd || commandInput.selectionStart !== commandInput.selectionEnd) return;
 
-        const favorites = await getFavorites();
-        const suggestion = getAutocompleteSuggestion(value, favorites);
+        const [favorites, history] = await Promise.all([
+            getFavorites(),
+            getCommandHistory()
+        ]);
+        const suggestion = getAutocompleteSuggestion(value, favorites, history);
         if (!suggestion) return;
 
         event.preventDefault();
         commandInput.value = suggestion;
         commandInput.setSelectionRange(suggestion.length, suggestion.length);
-        updateCommandGhost(suggestion, favorites);
+        updateCommandGhost(suggestion, favorites, history);
     });
 }
 
