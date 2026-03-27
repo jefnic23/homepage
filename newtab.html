@@ -146,7 +146,7 @@
             display: none;
         }
 
-        .search-form {
+        .command-bar {
             display: flex;
             align-items: center;
             gap: 10px;
@@ -156,7 +156,7 @@
             padding: 10px 12px;
         }
 
-        .search-form input {
+        .command-bar input {
             flex: 1;
             background: transparent;
             border: 0;
@@ -166,7 +166,7 @@
             min-width: 0;
         }
 
-        .search-form button {
+        .command-bar button {
             border: 0;
             border-radius: 12px;
             padding: 8px 14px;
@@ -177,8 +177,36 @@
             color: white;
         }
 
-        .search-form:focus-within {
+        .command-bar:focus-within {
             border-color: var(--accent);
+        }
+
+        .command-input-wrap {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .command-input-wrap input {
+            position: relative;
+            z-index: 2;
+            background: transparent;
+            width: 100%;
+        }
+
+        .command-ghost {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            font: inherit;
+            color: var(--muted);
+            opacity: 0.7;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
         }
 
         .weather-card {
@@ -301,7 +329,7 @@
             background: rgba(255, 255, 255, 0.06);
         }
 
-        .hero input:not(#searchInput):focus-visible,
+        .hero input:not(#commandInput):focus-visible,
         .hero button:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 2px;
@@ -923,9 +951,14 @@
                     </div>
                 </div>
                 <p class="greeting-note" id="greetingNote">Ready when you are.</p>
-                <form class="search-form" id="searchForm" role="search">
-                    <input id="searchInput" type="search" placeholder="Search with Brave" autocomplete="off" />
-                    <button type="submit">Search</button>
+                <form class="command-bar" id="commandForm" role="search">
+                    <div class="command-input-wrap">
+                        <span class="command-ghost" id="commandGhost" aria-hidden="true"></span>
+                        <input id="commandInput" type="text"
+                            placeholder="Type a command (yt cats, gh repo, mail)" autocomplete="off"
+                            spellcheck="false" aria-autocomplete="inline" />
+                    </div>
+                    <button type="submit">Go</button>
                 </form>
             </div>
             <div class="weather-card" id="weatherCard" aria-live="polite">

@@ -63,6 +63,69 @@ const THEME_DEFAULT = {
     backgroundUrl: ""
 };
 
+const COMMAND_HINT_TEXT = "Try: yt cats, gh repo, mail, docs";
+const COMMANDS = [
+    {
+        id: "youtube",
+        label: "YouTube Search",
+        aliases: ["yt", "youtube"],
+        type: "search",
+        template: "https://www.youtube.com/results?search_query={query}",
+        baseUrl: "https://www.youtube.com/",
+        description: "Search videos"
+    },
+    {
+        id: "github",
+        label: "GitHub Search",
+        aliases: ["gh", "github"],
+        type: "search",
+        template: "https://github.com/search?q={query}",
+        baseUrl: "https://github.com/",
+        description: "Search repos/issues"
+    },
+    {
+        id: "mail",
+        label: "Gmail",
+        aliases: ["mail", "gmail"],
+        type: "url",
+        url: "https://mail.google.com/",
+        description: "Open inbox"
+    },
+    {
+        id: "docs",
+        label: "Google Docs",
+        aliases: ["docs", "doc"],
+        type: "url",
+        url: "https://docs.google.com/document/u/0/",
+        description: "Open documents"
+    },
+    {
+        id: "drive",
+        label: "Google Drive",
+        aliases: ["drive"],
+        type: "url",
+        url: "https://drive.google.com/drive/u/0/my-drive",
+        description: "Open Drive"
+    },
+    {
+        id: "calendar",
+        label: "Google Calendar",
+        aliases: ["cal", "calendar"],
+        type: "url",
+        url: "https://calendar.google.com/calendar/u/0/r",
+        description: "View calendar"
+    },
+    {
+        id: "maps",
+        label: "Maps Search",
+        aliases: ["maps", "map"],
+        type: "search",
+        template: "https://www.google.com/maps/search/{query}",
+        baseUrl: "https://www.google.com/maps",
+        description: "Find a place"
+    }
+];
+
 function $(id) {
     return document.getElementById(id);
 }
@@ -755,13 +818,130 @@ async function handleWeatherOverrideSubmit(event) {
     }
 }
 
-function handleSearchSubmit(event) {
+function getCommandHintText() {
+    return COMMAND_HINT_TEXT;
+}
+
+function findCommandByAlias(alias) {
+    if (!alias) return null;
+    const lower = alias.toLowerCase();
+    return (
+        COMMANDS.find((command) => command.aliases.includes(lower)) ||
+        COMMANDS.find((command) => command.aliases.some((value) => lower.startsWith(value))) ||
+        null
+    );
+}
+
+function buildCommandUrl(command, query) {
+    if (!command) return "";
+    const trimmed = (query || "").trim();
+    if (command.type === "search") {
+        if (!trimmed) {
+            return command.baseUrl || command.template.replace("{query}", "");
+        }
+        return command.template.replace("{query}", encodeURIComponent(trimmed));
+    }
+    return command.url;
+}
+
+function looksLikeUrl(value) {
+    return /^(https?:\/\/|[\w-]+\.[\w.-]+)(\/|$)/i.test(value);
+}
+
+function findFavoriteMatch(query, favorites) {
+    const normalized = query.toLowerCase();
+    const exactMatch = favorites.find((favorite) => {
+        const name = (favorite.name || "").toLowerCase();
+        const host = getHostname(favorite.url).toLowerCase();
+        return name === normalized || host === normalized;
+    });
+    if (exactMatch) return exactMatch;
+
+    return favorites.find((favorite) => {
+        const name = (favorite.name || "").toLowerCase();
+        const host = getHostname(favorite.url).toLowerCase();
+        return name.startsWith(normalized) || host.startsWith(normalized);
+    });
+}
+
+function getAutocompleteSuggestion(value, favorites) {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+
+    const tokens = trimmed.split(/\s+/);
+    const firstToken = tokens[0].toLowerCase();
+    const rest = tokens.slice(1).join(" ");
+
+    const commandMatch = COMMANDS.find((command) =>
+        command.aliases.some((alias) => alias.startsWith(firstToken))
+    );
+
+    if (commandMatch && !rest) {
+        const alias = commandMatch.aliases[0];
+        if (alias.startsWith(firstToken) && alias !== firstToken) {
+            return alias;
+        }
+    }
+
+    if (!rest) {
+        const favoriteMatch = favorites.find((favorite) => {
+            const name = (favorite.name || "").toLowerCase();
+            const host = getHostname(favorite.url).toLowerCase();
+            return name.startsWith(firstToken) || host.startsWith(firstToken);
+        });
+
+        if (favoriteMatch) {
+            return favoriteMatch.name || getHostname(favoriteMatch.url);
+        }
+    }
+
+    return "";
+}
+
+function updateCommandGhost(value, favorites) {
+    const ghost = $("commandGhost");
+    if (!ghost) return;
+    const suggestion = getAutocompleteSuggestion(value, favorites);
+    if (!suggestion || suggestion.toLowerCase() === value.trim().toLowerCase()) {
+        ghost.textContent = "";
+        return;
+    }
+    ghost.textContent = suggestion;
+}
+
+async function resolveCommandInput(value) {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+
+    const tokens = trimmed.split(/\s+/);
+    const command = findCommandByAlias(tokens[0]);
+    if (command) {
+        return buildCommandUrl(command, tokens.slice(1).join(" "));
+    }
+
+    if (looksLikeUrl(trimmed)) {
+        try {
+            return normalizeUrl(trimmed);
+        } catch {
+            return "";
+        }
+    }
+
+    const favorites = await getFavorites();
+    const favoriteMatch = findFavoriteMatch(trimmed, favorites);
+    if (favoriteMatch?.url) {
+        return favoriteMatch.url;
+    }
+
+    return `https://search.brave.com/search?q=${encodeURIComponent(trimmed)}`;
+}
+
+async function handleCommandSubmit(event) {
     event.preventDefault();
-    const input = $("searchInput");
+    const input = $("commandInput");
     if (!input) return;
-    const query = input.value.trim();
-    if (!query) return;
-    const url = `https://search.brave.com/search?q=${encodeURIComponent(query)}`;
+    const url = await resolveCommandInput(input.value);
+    if (!url) return;
     window.location.assign(url);
 }
 
@@ -1471,6 +1651,7 @@ document.addEventListener("click", (event) => {
     }
 });
 
+
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
         if ($("favoriteModal").classList.contains("open")) {
@@ -1513,9 +1694,51 @@ $("favoriteUrl").addEventListener("blur", () => {
     }
 });
 
-const searchForm = $("searchForm");
-if (searchForm) {
-    searchForm.addEventListener("submit", handleSearchSubmit);
+const commandForm = $("commandForm");
+if (commandForm) {
+    commandForm.addEventListener("submit", handleCommandSubmit);
+}
+
+const commandInput = $("commandInput");
+if (commandInput) {
+    commandInput.addEventListener("input", async () => {
+        const favorites = await getFavorites();
+        updateCommandGhost(commandInput.value, favorites);
+    });
+
+    commandInput.addEventListener("focus", async () => {
+        const favorites = await getFavorites();
+        updateCommandGhost(commandInput.value, favorites);
+    });
+
+    commandInput.addEventListener("blur", () => {
+        const ghost = $("commandGhost");
+        if (ghost) {
+            ghost.textContent = "";
+        }
+    });
+
+    commandInput.addEventListener("keydown", async (event) => {
+        if (event.key !== "Tab" && event.key !== "ArrowRight") return;
+
+        const value = commandInput.value;
+        const atEnd = commandInput.selectionStart === value.length;
+        if (!atEnd || commandInput.selectionStart !== commandInput.selectionEnd) return;
+
+        const favorites = await getFavorites();
+        const suggestion = getAutocompleteSuggestion(value, favorites);
+        if (!suggestion) return;
+
+        event.preventDefault();
+        commandInput.value = suggestion;
+        commandInput.setSelectionRange(suggestion.length, suggestion.length);
+        updateCommandGhost(suggestion, favorites);
+    });
+}
+
+const commandHint = $("commandHint");
+if (commandHint) {
+    commandHint.textContent = getCommandHintText();
 }
 
 const weatherMenuTrigger = $("weatherMenuTrigger");
